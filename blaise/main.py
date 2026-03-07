@@ -13,7 +13,7 @@ TOKEN = os.getenv("DISK_TOKEN_TEST")
 GUILD_ID = 1462882277125259450
 
 intents = discord.Intents.all()
-
+test
 
 class BlaiseBot(commands.Bot):
 
