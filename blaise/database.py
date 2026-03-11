@@ -115,7 +115,8 @@ class Database:
                         guild_id BIGINT PRIMARY KEY,
                         channel_id BIGINT,
                         role_id BIGINT,
-                        message_id BIGINT
+                        message_id BIGINT,
+                        required_roles TEXT
                     );
                     """)
 
@@ -180,6 +181,18 @@ class Database:
     # =========================================================
     # BIRTHDAY SYSTEM
     # =========================================================
+
+    async def set_required_roles(self, guild_id, roles):
+
+        roles = ",".join(map(str, roles))
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO birthday_config(guild_id,required_roles)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE required_roles=%s
+                """, (guild_id, roles, roles))
 
     async def set_birthday(self, user_id, display_name, day, month):
 
@@ -284,7 +297,7 @@ class Database:
             async with conn.cursor() as cur:
 
                 await cur.execute("""
-                SELECT channel_id, role_id, message_id
+                SELECT channel_id, role_id, required_roles, message_id
                 FROM birthday_config
                 WHERE guild_id=%s
                 """, (guild_id,))

@@ -115,7 +115,18 @@ class SetupView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="🎭 Set Role", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="🔒 Роли без которых типы удалятся с таблицы", style=discord.ButtonStyle.blurple)
+    async def set_required(self, interaction: discord.Interaction, button: discord.ui.Button):
+        select = RequiredRoleSelect(self.cog)
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Selectează rolurile necesare:",
+            view=view,
+            ephemeral=True
+        )
+    @discord.ui.button(label="🎭 Выбрать роль для Дня Рождение", style=discord.ButtonStyle.blurple)
     async def set_role(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         select = RoleSelect(self.cog)
@@ -140,7 +151,7 @@ class SetupView(discord.ui.View):
             )
             return
 
-        channel_id, role_id, _ = config
+        channel_id, role_id, required_roles, message_id = config
 
         channel = interaction.guild.get_channel(channel_id)
 
@@ -163,6 +174,30 @@ class SetupView(discord.ui.View):
 
 
 # ---------------- SELECT MENUS ---------------- #
+
+class RequiredRoleSelect(discord.ui.RoleSelect):
+
+    def __init__(self, cog):
+        super().__init__(
+            placeholder="Выбирай роли",
+            min_values=1,
+            max_values=10
+        )
+        self.cog = cog
+
+    async def callback(self, interaction: discord.Interaction):
+
+        roles = [role.id for role in self.values]
+
+        await self.cog.bot.db.set_required_roles(
+            interaction.guild.id,
+            roles
+        )
+
+        await interaction.response.send_message(
+            "✅ Роли были сохранены",
+            ephemeral=True
+        )
 
 class ChannelSelect(discord.ui.ChannelSelect):
 
@@ -217,22 +252,58 @@ class Birthday(commands.Cog):
         self.bot = bot
         self.check_birthdays.start()
 
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+
+        try:
+            await self.bot.db.remove_birthday(member.id)
+        except:
+            pass
+
+        await self.update_embed()
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+
+        if before.roles == after.roles:
+            return
+
+        config = await self.bot.db.get_config(after.guild.id)
+
+        if not config:
+            return
+
+        _, _, required_roles, _ = config
+
+        if not required_roles:
+            return
+
+        required_roles = [int(r) for r in required_roles.split(",")]
+
+        has_required = any(role.id in required_roles for role in after.roles)
+
+        if not has_required:
+            await self.bot.db.remove_birthday(after.id)
+
+            await self.update_embed()
+
     async def cog_load(self):
 
         self.bot.add_view(BirthdayView(self))
 
-
     async def generate_embed(self):
+
+        today = datetime.datetime.now(ZoneInfo("Europe/Moscow"))
 
         months = {i: [] for i in range(1, 13)}
 
         rows = await self.bot.db.get_birthdays()
 
         for user_id, name, day, month in rows:
-            months[month].append((name, day))
+            months[month].append((user_id, name, day))
 
         embed = discord.Embed(
-            title="🎂 Server Birthdays",
+            title="🎂 Happy Birthday",
             color=discord.Color.pink()
         )
 
@@ -240,8 +311,12 @@ class Birthday(commands.Cog):
 
             text = ""
 
-            for name, day in sorted(months[m], key=lambda x: x[1]):
-                text += f"• **{day}** — {name}\n"
+            for user_id, name, day in sorted(months[m], key=lambda x: x[2]):
+
+                if day == today.day and m == today.month:
+                    text += f"⭐ **{day} — <@{user_id}> (TODAY)** 🎉\n"
+                else:
+                    text += f"• {day} — <@{user_id}>\n"
 
             if not text:
                 text = "—"
@@ -264,7 +339,7 @@ class Birthday(commands.Cog):
             if not config:
                 continue
 
-            channel_id, role_id, message_id = config
+            channel_id, role_id, required_roles, message_id = config
 
             channel = guild.get_channel(channel_id)
 
@@ -280,6 +355,21 @@ class Birthday(commands.Cog):
             except:
                 pass
 
+        async def cleanup_birthdays(self):
+
+            rows = await self.bot.db.get_birthdays()
+
+            for user_id, name, day, month in rows:
+
+                exists = False
+
+                for guild in self.bot.guilds:
+                    if guild.get_member(user_id):
+                        exists = True
+                        break
+
+                if not exists:
+                    await self.bot.db.remove_birthday(user_id)
 
 # ---------------- ADMIN COMMAND ---------------- #
 
@@ -324,6 +414,8 @@ class Birthday(commands.Cog):
     async def check_birthdays(self):
 
         today = datetime.datetime.now(ZoneInfo("Europe/Moscow"))
+
+        await self.cleanup_birthdays()
 
         users = await self.bot.db.get_today_birthdays(
             today.day,
