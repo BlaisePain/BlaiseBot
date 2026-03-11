@@ -53,6 +53,29 @@ class Database:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                     """)
+                # ----------------APP CONFIG----------------- #
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'apply_config'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE apply_config(
+                        guild_id BIGINT PRIMARY KEY,
+                        application_channel BIGINT,
+                        log_channel BIGINT,
+                        staff_roles TEXT,
+                        accept_role BIGINT,
+                        remove_role BIGINT,
+                        ticket_panel_channel BIGINT
+                    );
+                    """)
+
 
                 # ---------------- BIRTHDAYS ---------------- #
 
@@ -267,3 +290,81 @@ class Database:
                 """, (guild_id,))
 
                 return await cur.fetchone()
+
+            # =========================================================
+            # APP CONFIG
+            # =========================================================
+
+    async def set_apply_channel(self, guild_id, channel_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,application_channel)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE application_channel=%s
+                """, (guild_id, channel_id, channel_id))
+
+    async def set_apply_logs(self, guild_id, channel_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,log_channel)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE log_channel=%s
+                """, (guild_id, channel_id, channel_id))
+
+    async def set_apply_staff(self, guild_id, roles):
+
+        roles = ",".join(map(str, roles))
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,staff_roles)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE staff_roles=%s
+                """, (guild_id, roles, roles))
+
+    async def set_apply_accept(self, guild_id, role_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,accept_role)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE accept_role=%s
+                """, (guild_id, role_id, role_id))
+
+    async def set_apply_remove(self, guild_id, role_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,remove_role)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE remove_role=%s
+                """, (guild_id, role_id, role_id))
+
+    async def get_apply_config(self, guild_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel
+                FROM apply_config
+                WHERE guild_id=%s
+                """, (guild_id,))
+
+                return await cur.fetchone()
+
+    async def set_apply_panel_channel(self, guild_id, channel_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO apply_config(guild_id,ticket_panel_channel)
+                VALUES(%s,%s)
+                ON DUPLICATE KEY UPDATE ticket_panel_channel=%s
+                """, (guild_id, channel_id, channel_id))

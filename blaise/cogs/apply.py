@@ -3,22 +3,17 @@ from discord.ext import commands
 from discord import app_commands
 import time
 
-APPLICATION_CHANNEL_ID = 1477319164224864457
-STAFF_ROLE_ID = 1463082645771780157
-
-LEADER_ROLE_ID = 1462918028097359873
-RECRUITMENT_ROLE_ID = 1479547742651945108
-
-REMOVE_ROLE_ID = 1477231311843229878
-
-ACCEPT_ROLE_ID = 1463083432987852841
-LOG_CHANNEL_ID = 1477295300006776957
-
 cooldowns = {}
 
 
-def is_staff(member: discord.Member):
-    return any(role.id in [LEADER_ROLE_ID, RECRUITMENT_ROLE_ID] for role in member.roles)
+def is_staff(member: discord.Member, staff_roles):
+
+    if not staff_roles:
+        return False
+
+    roles = [int(r) for r in staff_roles.split(",")]
+
+    return any(role.id in roles for role in member.roles)
 
 
 def create_panel_embed():
@@ -47,6 +42,239 @@ def create_panel_embed():
     embed.set_footer(text="BLAISE FAMILY • RECRUITMENT")
 
     return embed
+
+class ApplySetupView(discord.ui.View):
+
+    def __init__(self, cog):
+        super().__init__(timeout=300)
+        self.cog = cog
+
+    @discord.ui.button(label="🎟 Канал панели", style=discord.ButtonStyle.blurple)
+    async def panel_channel(self, interaction: discord.Interaction, button):
+
+        select = discord.ui.ChannelSelect(channel_types=[discord.ChannelType.text])
+
+        async def callback(inter):
+            channel = select.values[0]
+
+            await self.cog.bot.db.set_apply_panel_channel(
+                inter.guild.id,
+                channel.id
+            )
+
+            await inter.response.send_message(
+                f"✅ Канал панели: {channel.mention}",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите канал для панели:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="📥 Канал заявок", style=discord.ButtonStyle.blurple)
+    async def app_channel(self, interaction: discord.Interaction, button):
+
+        select = discord.ui.ChannelSelect(channel_types=[discord.ChannelType.text])
+
+        async def callback(inter):
+
+            channel = select.values[0]
+
+            await self.cog.bot.db.set_apply_channel(
+                inter.guild.id,
+                channel.id
+            )
+
+            await inter.response.send_message(
+                f"✅ Канал заявок: {channel.mention}",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите канал:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="📜 Канал логов", style=discord.ButtonStyle.blurple)
+    async def log_channel(self, interaction, button):
+
+        select = discord.ui.ChannelSelect(channel_types=[discord.ChannelType.text])
+
+        async def callback(inter):
+
+            channel = select.values[0]
+
+            await self.cog.bot.db.set_apply_logs(
+                inter.guild.id,
+                channel.id
+            )
+
+            await inter.response.send_message(
+                f"✅ Канал логов: {channel.mention}",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите канал логов:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🎭 Staff роли", style=discord.ButtonStyle.blurple)
+    async def staff_roles(self, interaction, button):
+
+        select = discord.ui.RoleSelect(
+            min_values=1,
+            max_values=5,
+            placeholder="Выберите staff роли"
+        )
+
+        async def callback(inter):
+
+            roles = [r.id for r in select.values]
+
+            await self.cog.bot.db.set_apply_staff(
+                inter.guild.id,
+                roles
+            )
+
+            await inter.response.send_message(
+                "✅ Staff роли сохранены",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите роли:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🎭 Роль принятия", style=discord.ButtonStyle.green)
+    async def accept_role(self, interaction, button):
+
+        select = discord.ui.RoleSelect()
+
+        async def callback(inter):
+
+            role = select.values[0]
+
+            await self.cog.bot.db.set_apply_accept(
+                inter.guild.id,
+                role.id
+            )
+
+            await inter.response.send_message(
+                f"✅ Роль принятия: {role.mention}",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите роль:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🎭 Роль удаления", style=discord.ButtonStyle.red)
+    async def remove_role(self, interaction, button):
+
+        select = discord.ui.RoleSelect()
+
+        async def callback(inter):
+
+            role = select.values[0]
+
+            await self.cog.bot.db.set_apply_remove(
+                inter.guild.id,
+                role.id
+            )
+
+            await inter.response.send_message(
+                f"✅ Роль удаления: {role.mention}",
+                ephemeral=True
+            )
+
+        select.callback = callback
+
+        view = discord.ui.View()
+        view.add_item(select)
+
+        await interaction.response.send_message(
+            "Выберите роль:",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="📤 Опубликовать панель", style=discord.ButtonStyle.green)
+    async def publish_panel(self, interaction: discord.Interaction, button):
+
+        config = await self.cog.bot.db.get_apply_config(interaction.guild.id)
+
+        if not config:
+            return await interaction.response.send_message(
+                "⚠ Сначала настрой систему.",
+                ephemeral=True
+            )
+
+        application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel = config
+
+        if not application_channel:
+            return await interaction.response.send_message(
+                "⚠ Канал заявок не установлен.",
+                ephemeral=True
+            )
+
+        channel = interaction.guild.get_channel(ticket_panel_channel)
+
+        if not channel:
+            return await interaction.response.send_message(
+                "❌ Канал не найден.",
+                ephemeral=True
+            )
+
+        embed = create_panel_embed()
+
+        file = discord.File("banner.png", filename="banner.png")
+
+        embed.set_image(url="attachment://banner.png")
+
+        await channel.send(
+            embed=embed,
+            file=file,
+            view=ApplyButton(self.cog.bot)
+        )
+
+        await interaction.response.send_message(
+            "✅ Панель заявок опубликована.",
+            ephemeral=True
+        )
 
 
 class ApplyModal(discord.ui.Modal, title="📨 Заявка в семью BLAISE"):
@@ -108,7 +336,13 @@ class ApplyModal(discord.ui.Modal, title="📨 Заявка в семью BLAISE
                 ephemeral=True
             )
 
-        age = int(self.age.value)
+        try:
+            age = int(self.age.value)
+        except:
+            return await interaction.response.send_message(
+                "❌ Возраст должен быть числом.",
+                ephemeral=True
+            )
 
         app_id = await self.bot.db.create_application(
             interaction.user.id,
@@ -120,7 +354,24 @@ class ApplyModal(discord.ui.Modal, title="📨 Заявка в семью BLAISE
             self.online.value
         )
 
-        channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
+        config = await interaction.client.db.get_apply_config(interaction.guild.id)
+
+        if not config:
+            return await interaction.response.send_message(
+                "⚠ Система заявок не настроена.",
+                ephemeral=True
+            )
+
+        application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel = config
+
+
+        channel = interaction.guild.get_channel(application_channel)
+
+        if not channel:
+            return await interaction.response.send_message(
+                "❌ Канал заявок не найден.",
+                ephemeral=True
+            )
 
         embed = discord.Embed(
             title="📨 Новая заявка • BLAISE",
@@ -165,8 +416,17 @@ class ApplyModal(discord.ui.Modal, title="📨 Заявка в семью BLAISE
 
         embed.set_footer(text=f"BLAISE FAMILY • Application ID: {app_id} | Всего заявок: {len(rows)+1}")
 
+        content = None
+
+        if staff_roles:
+            roles = staff_roles.split(",")
+
+            mentions = [f"<@&{r}>" for r in roles]
+
+            content = " ".join(mentions)
+
         await channel.send(
-            content=f"<@&{STAFF_ROLE_ID}>",
+            content=content,
             embed=embed,
             view=StaffButtons()
         )
@@ -185,7 +445,17 @@ class StaffButtons(discord.ui.View):
 
     async def process(self, interaction, status):
 
-        if not is_staff(interaction.user):
+        config = await interaction.client.db.get_apply_config(interaction.guild.id)
+
+        if not config:
+            return await interaction.response.send_message(
+                "⚠ Apply система не настроена.",
+                ephemeral=True
+            )
+
+        application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel = config
+
+        if not is_staff(interaction.user, staff_roles):
             return await interaction.response.send_message(
                 "❌ Нет доступа.",
                 ephemeral=True
@@ -213,7 +483,8 @@ class StaffButtons(discord.ui.View):
         guild = interaction.guild
         user = guild.get_member(user_id)
 
-        log_channel = guild.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            log_channel = guild.get_channel(log_channel)
 
         if status == "accepted":
 
@@ -242,16 +513,21 @@ class StaffButtons(discord.ui.View):
 
                 await log_channel.send(embed=log_embed)
 
-            role = guild.get_role(ACCEPT_ROLE_ID)
-            remove_role = guild.get_role(REMOVE_ROLE_ID)
-            if user:
-                await user.add_roles(role)
+            if accept_role:
+                accept = guild.get_role(accept_role)
+                if accept and user:
+                    await user.add_roles(accept)
 
-                if remove_role and remove_role in user.roles:
-                    await user.remove_roles(remove_role)
+            if remove_role:
+                remove = guild.get_role(remove_role)
+                if remove and user and remove in user.roles:
+                    await user.remove_roles(remove)
 
             if user:
-                await user.send("✅ Ваша заявка была **принята**!")
+                try:
+                    await user.send("✅ Ваша заявка была **принята**!")
+                except:
+                    pass
 
             await interaction.message.edit(embed=embed, view=None)
 
@@ -289,7 +565,10 @@ class StaffButtons(discord.ui.View):
                 await log_channel.send(embed=log_embed)
 
             if user:
-                await user.send("❌ Ваша заявка была **отклонена**.")
+                try:
+                    await user.send("❌ Ваша заявка была **отклонена**.")
+                except:
+                        pass
 
             await interaction.message.edit(embed=embed, view=None)
 
@@ -310,10 +589,13 @@ class StaffButtons(discord.ui.View):
             )
 
             if user:
-                await user.send("📞 Вас пригласили на **обзвон**.\n\n"
-                                "Зайдите в голосовой канал:\n"
-                                "<#1479327122588958922>"
+                try:
+                    await user.send("📞 Вас пригласили на **обзвон**.\n\n"
+                                    "Зайдите в голосовой канал:\n"
+                                    "<#1479327122588958922>"
                                 )
+                except:
+                    pass
 
 
             # stergem doar butonul interview
@@ -336,7 +618,17 @@ class StaffButtons(discord.ui.View):
     @discord.ui.button(label="Отказать", style=discord.ButtonStyle.danger, emoji="❌", custom_id="apply_reject")
     async def reject(self, interaction: discord.Interaction, button):
 
-        if not is_staff(interaction.user):
+        config = await interaction.client.db.get_apply_config(interaction.guild.id)
+
+        if not config:
+            return await interaction.response.send_message(
+                "⚠ Apply система не настроена.",
+                ephemeral=True
+            )
+
+        application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel = config
+
+        if not is_staff(interaction.user, staff_roles):
             return await interaction.response.send_message(
                 "❌ Нет доступа.",
                 ephemeral=True
@@ -353,24 +645,46 @@ class StaffButtons(discord.ui.View):
     @discord.ui.button(label="Apps", style=discord.ButtonStyle.secondary, emoji="📊", custom_id="apply_apps")
     async def apps(self, interaction: discord.Interaction, button):
 
-        if not is_staff(interaction.user):
-            return await interaction.response.send_message(
+        await interaction.response.defer(ephemeral=True)
+
+        config = await interaction.client.db.get_apply_config(interaction.guild.id)
+
+        if not config:
+            return await interaction.followup.send(
+                "⚠ Apply система не настроена.",
+                ephemeral=True
+            )
+
+        application_channel, log_channel, staff_roles, accept_role, remove_role, ticket_panel_channel = config
+
+        if not is_staff(interaction.user, staff_roles):
+            return await interaction.followup.send(
                 "❌ Нет доступа.",
                 ephemeral=True
             )
 
         embed = interaction.message.embeds[0]
 
-        # luam user_id din embed
+        user_id = None
+
         for field in embed.fields:
             if field.name == "👤 Игрок":
-                user_id = int(field.value.split("`")[1])
+                try:
+                    user_id = int(field.value.replace("<@", "").replace(">", "").replace("!", ""))
+                except:
+                    pass
                 break
+
+        if not user_id:
+            return await interaction.followup.send(
+                "Не удалось найти ID игрока.",
+                ephemeral=True
+            )
 
         rows = await interaction.client.db.get_user_applications(user_id)
 
         if not rows:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "У игрока нет заявок.",
                 ephemeral=True
             )
@@ -384,12 +698,9 @@ class StaffButtons(discord.ui.View):
 
             ic = r[0]
             age = r[1]
-            history = r[2]
-            motivation = r[3]
-            online = r[4]
             status = r[5]
-            reason = r[7]
             created = r[6]
+            reason = r[7]
 
             if status == "accepted":
                 status_icon = "✅"
@@ -408,7 +719,7 @@ class StaffButtons(discord.ui.View):
 
         result.set_footer(text=f"Всего заявок: {len(rows)}")
 
-        await interaction.response.send_message(embed=result, ephemeral=True)
+        await interaction.followup.send(embed=result, ephemeral=True)
 
 class RejectModal(discord.ui.Modal, title="❌ Причина отклонения"):
 
@@ -462,7 +773,15 @@ class RejectModal(discord.ui.Modal, title="❌ Причина отклонени
             )
 
         # LOG
-        log_channel = guild.get_channel(LOG_CHANNEL_ID)
+        log_channel = None
+
+        config = await interaction.client.db.get_apply_config(interaction.guild.id)
+
+        if config:
+            _, log_channel, _, _, _, _ = config
+
+            if log_channel:
+                log_channel = guild.get_channel(log_channel)
 
         if log_channel:
 
@@ -522,32 +841,37 @@ class ApplyButton(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-class Apply(commands.Cog):
+class ApplySetup(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="applypanel", description="Создать панель заявки")
-    @app_commands.checks.has_any_role(LEADER_ROLE_ID, RECRUITMENT_ROLE_ID)
-    async def applypanel(self, interaction: discord.Interaction):
+    @app_commands.command(name="applysetup")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def apply_setup(self, interaction: discord.Interaction):
 
-        embed = create_panel_embed()
-
-        file = discord.File("banner.png", filename="banner.png")
-
-        embed.set_image(url="attachment://banner.png")
-
-        await interaction.channel.send(
-            embed=embed,
-            file=file,
-            view=ApplyButton(self.bot)
+        embed = discord.Embed(
+            title="⚙ Настройка системы заявок",
+            description=(
+                "Используйте кнопки ниже для настройки.\n\n"
+                "• канал заявок\n"
+                "• канал логов\n"
+                "• staff роли\n"
+                "• роль принятия\n"
+                "• роль удаления"
+            ),
+            color=discord.Color.orange()
         )
 
-        await interaction.response.defer()
+        await interaction.response.send_message(
+            embed=embed,
+            view=ApplySetupView(self),
+            ephemeral=True
+        )
 
 async def setup(bot):
 
-    await bot.add_cog(Apply(bot))
+    await bot.add_cog(ApplySetup(bot))
 
     bot.add_view(ApplyButton(bot))
     bot.add_view(StaffButtons())

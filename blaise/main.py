@@ -48,6 +48,8 @@ bot = BlaiseBot()
 @bot.event
 async def on_ready():
     print(f"✅ Bot online: {bot.user}")
+    bot.add_view(ApplyButton(bot))
+    bot.add_view(StaffButtons())
 
 
 async def main():
