@@ -12,7 +12,9 @@ TOKEN = os.getenv("DISK_TOKEN_TEST")
 
 GUILD_ID = 1462882277125259450
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
 
 class BlaiseBot(commands.Bot):
 
@@ -33,6 +35,8 @@ class BlaiseBot(commands.Bot):
             if file.endswith(".py"):
                 await self.load_extension(f"cogs.{file[:-3]}")
 
+
+
         # instant slash command sync
         guild = discord.Object(id=GUILD_ID)
 
@@ -48,13 +52,17 @@ bot = BlaiseBot()
 @bot.event
 async def on_ready():
     print(f"✅ Bot online: {bot.user}")
-    bot.add_view(ApplyButton(bot))
-    bot.add_view(StaffButtons())
 
 
 async def main():
-    async with bot:
-        await bot.start(TOKEN)
+
+    while True:
+        try:
+            async with bot:
+                await bot.start(TOKEN)
+        except Exception as e:
+            print("Bot crashed:", e)
+            await asyncio.sleep(5)
 
 
 asyncio.run(main())

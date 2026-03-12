@@ -76,6 +76,27 @@ class Database:
                     );
                     """)
 
+                # ---------------- ACADEMY CONFIG ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'academy_config'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE academy_config(
+                        guild_id BIGINT PRIMARY KEY,
+                        role_id BIGINT,
+                        category_id BIGINT,
+                        log_channel_id BIGINT
+                    );
+                    """)
+
 
                 # ---------------- BIRTHDAYS ---------------- #
 
@@ -381,3 +402,50 @@ class Database:
                 VALUES(%s,%s)
                 ON DUPLICATE KEY UPDATE ticket_panel_channel=%s
                 """, (guild_id, channel_id, channel_id))
+
+    # =========================================================
+    # ACADEMY CONFIG
+    # =========================================================
+
+    async def set_academy_role(self, guild_id, role_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO academy_config(guild_id, role_id)
+                VALUES(%s, %s)
+                ON DUPLICATE KEY UPDATE role_id=%s
+                """, (guild_id, role_id, role_id))
+
+    async def set_academy_category(self, guild_id, category_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO academy_config(guild_id, category_id)
+                VALUES(%s, %s)
+                ON DUPLICATE KEY UPDATE category_id=%s
+                """, (guild_id, category_id, category_id))
+
+    async def set_academy_logs(self, guild_id, log_channel_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO academy_config(guild_id, log_channel_id)
+                VALUES(%s, %s)
+                ON DUPLICATE KEY UPDATE log_channel_id=%s
+                """, (guild_id, log_channel_id, log_channel_id))
+
+    async def get_academy_config(self, guild_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT role_id, category_id, log_channel_id
+                FROM academy_config
+                WHERE guild_id=%s
+                """, (guild_id,))
+
+                return await cur.fetchone()
+
