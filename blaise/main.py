@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from database import Database
 
-load_dotenv()
+load_dotenv(".env")
 
 TOKEN = os.getenv("DISK_TOKEN_TEST")
 
@@ -14,6 +14,8 @@ GUILD_ID = 1462882277125259450
 
 intents = discord.Intents.default()
 intents.members = True
+intents.guilds = True
+intents.reactions = True
 intents.message_content = True
 
 class BlaiseBot(commands.Bot):
@@ -40,7 +42,6 @@ class BlaiseBot(commands.Bot):
         # instant slash command sync
         guild = discord.Object(id=GUILD_ID)
 
-        self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
 
         print("✅ Slash commands synced instantly.")
@@ -53,6 +54,13 @@ bot = BlaiseBot()
 async def on_ready():
     print(f"✅ Bot online: {bot.user}")
 
+@bot.event
+async def on_message(message):
+
+    if message.author.bot:
+        return
+
+    await bot.process_commands(message)
 
 async def main():
 

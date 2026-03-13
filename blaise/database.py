@@ -53,6 +53,127 @@ class Database:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                     """)
+
+                # ---------------- CONTRACTS ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'contracts'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE contracts(
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        guild_id BIGINT,
+                        message_id BIGINT,
+                        creator_id BIGINT,
+                        collect_time INT,
+                        skills VARCHAR(20),
+                        deadline VARCHAR(50),
+                        thread_id BIGINT,
+                        status VARCHAR(20),
+                        end_time DATETIME,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """)
+
+                # ---------------- VACATION CONFIG ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'vacation_config'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE vacation_config(
+                        guild_id BIGINT PRIMARY KEY,
+                        panel_channel BIGINT,
+                        log_channel BIGINT,
+                        vacation_role BIGINT,
+                        break_role BIGINT,
+                        staff_roles TEXT
+                    );
+                    """)
+
+                # ---------------- VACATIONS ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'vacations'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE vacations(
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        guild_id BIGINT,
+                        user_id BIGINT,
+                        type VARCHAR(20),
+                        start_date DATETIME,
+                        end_date DATETIME,
+                        reminder_sent BOOLEAN DEFAULT FALSE
+                    );
+                    """)
+
+                # ---------------- VACATION HISTORY ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'vacation_history'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE vacation_history(
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        guild_id BIGINT,
+                        user_id BIGINT,
+                        type VARCHAR(20),
+                        start_date DATETIME,
+                        end_date DATETIME,
+                        completed_at DATETIME,
+                        early_ended BOOLEAN
+                    );
+                    """)
+
+                # ---------------- CONTRACT PARTICIPANTS ---------------- #
+
+                await cur.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                AND table_name = 'contract_participants'
+                """)
+
+                exists = await cur.fetchone()
+
+                if exists[0] == 0:
+                    await cur.execute("""
+                    CREATE TABLE contract_participants(
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        guild_id BIGINT,
+                        message_id BIGINT,
+                        user_id BIGINT
+                    );
+                    """)
                 # ----------------APP CONFIG----------------- #
                 await cur.execute("""
                 SELECT COUNT(*)
@@ -449,3 +570,184 @@ class Database:
 
                 return await cur.fetchone()
 
+    # =========================================================
+    # CONTRACTS CONFIG
+    # =========================================================
+
+    async def create_contract(self, guild_id, message_id, creator_id, time, skills, deadline, thread_id, end_time,
+                              created_at):
+        """Creează un contract nou în baza de date"""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO contracts
+                (guild_id, message_id, creator_id, collect_time, skills, deadline, thread_id, status, end_time, created_at)
+                VALUES(%s, %s, %s, %s, %s, %s, %s, 'collecting', %s, %s)
+                """, (guild_id, message_id, creator_id, time, skills, deadline, thread_id, end_time, created_at))
+
+    async def get_contract_count(self, guild_id):
+        """Obține numărul de contracte pentru un guild"""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT COUNT(*) 
+                FROM contracts 
+                WHERE guild_id=%s
+                """, (guild_id,))
+
+                result = await cur.fetchone()
+                return result[0] if result else 0
+
+    async def get_contract(self, guild_id, message_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute("""
+                SELECT *
+                FROM contracts
+                WHERE guild_id=%s AND message_id=%s
+                """, (guild_id, message_id))
+
+                return await cur.fetchone()
+
+    async def update_contract_status(self, guild_id, message_id, status):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                UPDATE contracts
+                SET status=%s
+                WHERE guild_id=%s AND message_id=%s
+                """, (status, guild_id, message_id))
+
+    async def add_participant(self, guild_id, message_id, user_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT id FROM contract_participants
+                WHERE guild_id=%s AND message_id=%s AND user_id=%s
+                """, (guild_id, message_id, user_id))
+
+                exists = await cur.fetchone()
+
+                if exists:
+                    return False
+
+                await cur.execute("""
+                INSERT INTO contract_participants(guild_id,message_id,user_id)
+                VALUES(%s,%s,%s)
+                """, (guild_id, message_id, user_id))
+
+                return True
+
+    async def remove_participant(self, guild_id, message_id, user_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                DELETE FROM contract_participants
+                WHERE guild_id=%s AND message_id=%s AND user_id=%s
+                """, (guild_id, message_id, user_id))
+
+                return cur.rowcount > 0
+
+    async def get_participants(self, guild_id, message_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT user_id
+                FROM contract_participants
+                WHERE guild_id=%s AND message_id=%s
+                """, (guild_id, message_id))
+
+                rows = await cur.fetchall()
+
+                return [r[0] for r in rows]
+
+    async def get_all_contracts(self, guild_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute("""
+                SELECT *
+                FROM contracts
+                WHERE guild_id=%s
+                """, (guild_id,))
+
+                return await cur.fetchall()
+
+    # ================= VACATION =================
+
+    async def set_vacation_config(self, guild_id, panel, logs, vac_role, break_role, staff):
+
+        staff = ",".join(map(str, staff))
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO vacation_config
+                (guild_id,panel_channel,log_channel,vacation_role,break_role,staff_roles)
+                VALUES(%s,%s,%s,%s,%s,%s)
+                ON DUPLICATE KEY UPDATE
+                panel_channel=%s,
+                log_channel=%s,
+                vacation_role=%s,
+                break_role=%s,
+                staff_roles=%s
+                """, (guild_id, panel, logs, vac_role, break_role, staff,
+                      panel, logs, vac_role, break_role, staff))
+
+    async def get_vacation_config(self, guild_id):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT panel_channel,log_channel,vacation_role,break_role,staff_roles
+                FROM vacation_config
+                WHERE guild_id=%s
+                """, (guild_id,))
+
+                return await cur.fetchone()
+
+    async def create_vacation(self, guild, user, type, start, end):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO vacations
+                (guild_id,user_id,type,start_date,end_date)
+                VALUES(%s,%s,%s,%s,%s)
+                """, (guild, user, type, start, end))
+
+    async def get_active_vacations(self, guild):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                SELECT user_id,type,start_date,end_date
+                FROM vacations
+                WHERE guild_id=%s
+                """, (guild,))
+
+                return await cur.fetchall()
+
+    async def remove_vacation(self, guild, user):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                DELETE FROM vacations
+                WHERE guild_id=%s AND user_id=%s
+                """, (guild, user))
+
+    async def add_history(self, guild, user, type, start, end, early):
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                INSERT INTO vacation_history
+                (guild_id,user_id,type,start_date,end_date,completed_at,early_ended)
+                VALUES(%s,%s,%s,%s,%s,NOW(),%s)
+                """, (guild, user, type, start, end, early))
